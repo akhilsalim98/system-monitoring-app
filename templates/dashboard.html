@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Metrics Dashboard</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <h1>System Metrics Dashboard</h1>
+    <table>
+        <tr>
+            <th>Timestamp</th>
+            <th>CPU Usage (%)</th>
+            <th>RAM Usage (GB)</th>
+            <th>Disk Usage (GB)</th>
+            <th>Uptime (Hours)</th>
+            <th>Temperature (°C)</th>
+        </tr>
+        {% for metric in metrics %}
+        <tr>
+            <td>{{ metric.timestamp }}</td>
+            <td>{{ metric.cpu_usage }}</td>
+            <td>{{ metric.ram_usage }}</td>
+            <td>{{ metric.disk_usage }}</td>
+            <td>{{ metric.uptime }}</td>
+            <td>{{ metric.temperature or 'N/A' }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
