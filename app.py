@@ -28,28 +28,48 @@ class Metric(db.Model):
 
 def collect_metrics():
     while True:
-        cpu_usage = psutil.cpu_percent()
-        ram_usage = psutil.virtual_memory().used / (1024 ** 3) 
-        disk_usage = psutil.disk_usage('/').free / (1024 ** 3)
-        uptime = time.time() - psutil.boot_time() 
-        temperature = None
+        try:
+            cpu_usage = psutil.cpu_percent()
+            ram_usage = psutil.virtual_memory().used / (1024 ** 3)
+            partitions = psutil.disk_partitions()
+            if partitions:
+                device = partitions[0].device
+                normalized_device = os.path.normpath(device).replace("\\", "/")
+                print(f"Normalized Device: {normalized_device}")
 
-        if hasattr(psutil.sensors_temperatures(), 'coretemp'):
-            core_temp = psutil.sensors_temperatures().get('coretemp', [])
-            if core_temp:
-                temperature = core_temp[0].current
+                try:
+                    if os.path.exists(normalized_device):
+                        disk_usage = psutil.disk_usage(normalized_device).free / (1024 ** 3)
+                    else:
+                        disk_usage = 0 
+                except Exception as e:
+                    print(f"Error accessing disk usage for {normalized_device}: {e}")
+                    disk_usage = 0
+            else:
+                disk_usage = 0 
+            uptime = time.time() - psutil.boot_time()
 
-        new_metric = Metric(
-            cpu_usage=cpu_usage,
-            ram_usage=ram_usage,
-            disk_usage=disk_usage,
-            uptime=uptime / 3600,
-            temperature=temperature
-        )
+            temperature = None
+            if hasattr(psutil, 'sensors_temperatures') and 'coretemp' in psutil.sensors_temperatures():
+                core_temp = psutil.sensors_temperatures().get('coretemp', [])
+                if core_temp:
+                    temperature = core_temp[0].current 
 
-        db.session.add(new_metric)
-        db.session.commit()
+            new_metric = Metric(
+                cpu_usage=cpu_usage,
+                ram_usage=ram_usage,
+                disk_usage=disk_usage,
+                uptime=uptime / 3600, 
+                temperature=temperature
+            )
 
+            with app.app_context(): 
+                db.session.add(new_metric)
+                db.session.commit()
+
+        except Exception as e:
+            print(f"Error collecting metrics: {e}")
+        
         time.sleep(30)
 
 @app.route('/')
@@ -59,22 +79,28 @@ def dashboard():
 
 @app.route('/metrics')
 def get_metrics():
-    metrics = Metric.query.order_by(Metric.timestamp.desc()).limit(20).all()
-    return jsonify([{
-        'timestamp': metric.timestamp,
-        'cpu_usage': metric.cpu_usage,
-        'ram_usage': metric.ram_usage,
-        'disk_usage': metric.disk_usage,
-        'uptime': metric.uptime,
-        'temperature': metric.temperature
-    } for metric in metrics])
+    try:
+        metrics = Metric.query.order_by(Metric.timestamp.desc()).limit(20).all()
+        metrics_list = []
+        for metric in metrics:
+            metrics_list.append({
+                'timestamp': metric.timestamp,
+                'cpu_usage': metric.cpu_usage,
+                'ram_usage': metric.ram_usage,
+                'disk_usage': metric.disk_usage,
+                'uptime': metric.uptime,
+                'temperature': metric.temperature
+            })
+        return jsonify(metrics_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-if __name__ == "__main__":
-    if not os.path.exists('metrics.db'):
-        db.create_all()
-    
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all() 
+
     metric_thread = Thread(target=collect_metrics)
-    metric_thread.daemon = True
+    metric_thread.daemon = True 
     metric_thread.start()
-    
-    app.run(host='0.0.0.0', port=5000)
+
+    app.run(debug=True, host='127.0.0.1', port=5000)
