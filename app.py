@@ -15,7 +15,8 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///metrics.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
+db = SQLAlchemy()
+db.init_app(app)
 
 class Metric(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -103,4 +104,4 @@ if __name__ == '__main__':
     metric_thread.daemon = True 
     metric_thread.start()
 
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
